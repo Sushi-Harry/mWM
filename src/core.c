@@ -1,11 +1,19 @@
 #include "../include/core.h"
+#include "../include/layout.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
 static int x_error_handler(Display *dpy, XErrorEvent *ee){
-    // the XErrorEvent variable stores info for the error that was caught
-    fprintf(stderr, "[mWM] X11 Error: Request Code %d, Error Code %d\n", ee->request_code, ee->error_code);
+    // This is some peak window handling right here. Takee notes kids
+    if (ee->error_code == BadWindow ||
+        (ee->request_code == XConfigureWindow && ee->error_code == BadWindow)){
+        return 0;
+    }
+
+      // the XErrorEvent variable stores info for the error that was caught
+      fprintf(stderr, "[mWM] X11 Error: Request Code %d, Error Code %d\n",
+              ee->request_code, ee->error_code);
     return 0;
 }
 
@@ -59,11 +67,37 @@ void event_loop_core(WMState *state){
             case MapRequest:{
                 XMapRequestEvent *mev = &xev.xmaprequest;
                 // This is for adding a border so that the windows are visible
-                XSetWindowBorderWidth(state->_DPY, mev->window, 10);
-                XSetWindowBorder(state->_DPY, mev->window, 0xff0000); // that last argument is just the color code in hex
-                
+                XSetWindowBorderWidth(state->_DPY, mev->window, state->_BORDER);
+                XSetWindowBorder(state->_DPY, mev->window, state->_BORDER_COLOR); // that last argument is just the color code in hex
                 // Now mapping the actual window
                 XMapWindow(state->_DPY, mev->window);
+
+                Client *client = malloc(sizeof(Client));
+                client->_WINDOW_ID = mev->window;
+                client->_X = 0; client->_Y = 0; client->_W = 400; client->_H = 300;
+                client->_FLOATING = false;
+                client->_NEXT = state->_CLIENTS;
+                state->_CLIENTS = client;
+
+                // Calling in the tiling function
+                layout_apply_tiling_algo(state);
+
+                break;
+            }
+            case DestroyNotify:
+            case UnmapNotify:{
+                Window w = (xev.type == UnmapNotify) ? xev.xunmap.window : xev.xdestroywindow.window;
+                Client **pp = &state->_CLIENTS;
+                while(*pp){
+                    Client *curr = *pp;
+                    if(curr->_WINDOW_ID == w){
+                        *pp = curr->_NEXT;
+                        free(curr);
+                        break;
+                    }
+                    pp = &curr->_NEXT;
+                }
+                layout_apply_tiling_algo(state);
                 break;
             }
             default:
