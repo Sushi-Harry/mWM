@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <X11/keysym.h>
+#include "../include/config.h"
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
 static int x_error_handler(Display *dpy, XErrorEvent *ee){
@@ -47,7 +48,7 @@ void initialize_core(WMState *state){
     printf("[mWM] Initialized on %s (%d, %d)\n", XDisplayName(NULL), state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT);
 
     // Grabkey call
-    grab_key(state);
+    grab_key(state, default_keys, default_keys_count);
 }
 
 void event_loop_core(WMState *state){
@@ -110,17 +111,34 @@ void event_loop_core(WMState *state){
             case KeyPress:{
                 XKeyEvent *kev = &xev.xkey;
                 KeySym keysym = XLookupKeysym(kev, 0);
-                if((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_Return){
-                    spawn("xterm");
-                }else if ((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_c) {
-                    if (state->_CLIENTS) {
-                        // Send kill request to the top window in stack
-                        XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
+                
+                unsigned int clean_state = kev->state & ~(LockMask | Mod2Mask);
+                for(size_t i = 0; i < default_keys_count; i++){
+                    if(keysym == default_keys[i]._KEYSYM && clean_state == default_keys[i]._MOD){
+                        switch (default_keys[i]._ACTION) {
+
+                        case ACTION_SPAWN:{
+                            if (default_keys[i]._ARG._COMMAND) {
+                                    spawn(default_keys[i]._ARG._COMMAND);
+                                }
+                            break;
+                        }
+                        case ACTION_KILL_CLIENT:{
+                            if(state->_CLIENTS){
+                                XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
+                            }
+                            break;
+                        }
+                        case ACTION_QUIT_WM:{
+                            state->_RUNNING = false;
+                            break;
+                        }
+                        case ACTION_FOCUS_NEXT:
+                        case ACTION_FOCUS_PREVIOUS:
+                          break;
+                        }
                     }
-                }else if ((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_q){
-                    state->_RUNNING = false;
                 }
-                break;
             }
             default:
                 break;
@@ -156,31 +174,17 @@ void spawn(const char *command){
     For that we'll use the XKeySymToKeycode() function and then register the input with XGrabKey()
 */
 
-void grab_key(WMState* state){
+void grab_key(WMState* state, const KeyBinding* keys, size_t keys_count){
     // ungrab any existing keys
     XUngrabKey(state->_DPY, AnyKey, AnyModifier, state->_ROOT);
-
-    // Keybinding config table
-    struct {
-        unsigned int mod;
-        KeySym keysym;
-    } keys[] = {
-        // This one is for opening xterm (alt + shift + enter)
-        {Mod1Mask | ShiftMask, XK_Return},
-        // this one is for closing the focused window (alt + shift + C)
-        {Mod1Mask | ShiftMask, XK_c},
-        // This one is for quitting the wm (alt + shift + Q)
-        {Mod1Mask | ShiftMask, XK_q}
-    };
-
     // This part is to ignore modifier keys such as Caps Lock, num lock, scroll lock etc.
     unsigned int modifiers[] = { 0, LockMask, Mod2Mask, LockMask | Mod2Mask };
 
-    for(size_t i = 0; i < sizeof(keys) / sizeof(keys[0]) ; i++){
-        KeyCode code = XKeysymToKeycode(state->_DPY, keys[i].keysym);
+    for(size_t i = 0; i < keys_count ; i++){
+        KeyCode code = XKeysymToKeycode(state->_DPY, keys[i]._KEYSYM);
         if(code == 0) continue;
         for(size_t j = 0; j < sizeof(modifiers) / sizeof(modifiers[0]); j++){
-            XGrabKey(state->_DPY, code, keys[i].mod | modifiers[j], state->_ROOT, True, GrabModeAsync, GrabModeAsync);
+            XGrabKey(state->_DPY, code, keys[i]._MOD | modifiers[j], state->_ROOT, True, GrabModeAsync, GrabModeAsync);
 
         }
     }
