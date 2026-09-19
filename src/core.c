@@ -2,12 +2,16 @@
 #include "../include/layout.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <X11/Xproto.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <X11/keysym.h>
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
 static int x_error_handler(Display *dpy, XErrorEvent *ee){
     // This is some peak window handling right here. Takee notes kids
     if (ee->error_code == BadWindow ||
-        (ee->request_code == XConfigureWindow && ee->error_code == BadWindow)){
+        (ee->request_code == X_ConfigureWindow && ee->error_code == BadWindow)){
         return 0;
     }
 
@@ -41,6 +45,9 @@ void initialize_core(WMState *state){
 
     // Print into the console that the window and stuff was initialized successfully
     printf("[mWM] Initialized on %s (%d, %d)\n", XDisplayName(NULL), state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT);
+
+    // Grabkey call
+    grab_key(state);
 }
 
 void event_loop_core(WMState *state){
@@ -100,6 +107,21 @@ void event_loop_core(WMState *state){
                 layout_apply_tiling_algo(state);
                 break;
             }
+            case KeyPress:{
+                XKeyEvent *kev = &xev.xkey;
+                KeySym keysym = XLookupKeysym(kev, 0);
+                if((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_Return){
+                    spawn("xterm");
+                }else if ((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_c) {
+                    if (state->_CLIENTS) {
+                        // Send kill request to the top window in stack
+                        XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
+                    }
+                }else if ((kev->state & (Mod1Mask | ShiftMask)) == (Mod1Mask | ShiftMask) && keysym == XK_q){
+                    state->_RUNNING = false;
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -111,4 +133,55 @@ void cleanup_core(WMState *state){
         XCloseDisplay(state->_DPY);
     }
     printf("[mWM] Shutting Down\n");
+}
+
+void spawn(const char *command){
+    if(fork() == 0){
+        if(fork() == 0){
+            // Child process execute command
+            char *args[] = {(char*)command, NULL};
+            execvp(command, args);
+            perror("[mWM execvp failed");
+            exit(EXIT_FAILURE);
+        }
+        exit(EXIT_SUCCESS);
+    }
+    wait(NULL);
+}
+
+// Here's some explanation
+/*
+    So X11 uses KeyCodes that are hardware-dependent integers instead of using raw ASCII.
+    So to pass input data to XGrabKey, we need to convert normal ASCII, or rather KeySyms to KeyCodes that X11 can understand
+    For that we'll use the XKeySymToKeycode() function and then register the input with XGrabKey()
+*/
+
+void grab_key(WMState* state){
+    // ungrab any existing keys
+    XUngrabKey(state->_DPY, AnyKey, AnyModifier, state->_ROOT);
+
+    // Keybinding config table
+    struct {
+        unsigned int mod;
+        KeySym keysym;
+    } keys[] = {
+        // This one is for opening xterm (alt + shift + enter)
+        {Mod1Mask | ShiftMask, XK_Return},
+        // this one is for closing the focused window (alt + shift + C)
+        {Mod1Mask | ShiftMask, XK_c},
+        // This one is for quitting the wm (alt + shift + Q)
+        {Mod1Mask | ShiftMask, XK_q}
+    };
+
+    // This part is to ignore modifier keys such as Caps Lock, num lock, scroll lock etc.
+    unsigned int modifiers[] = { 0, LockMask, Mod2Mask, LockMask | Mod2Mask };
+
+    for(size_t i = 0; i < sizeof(keys) / sizeof(keys[0]) ; i++){
+        KeyCode code = XKeysymToKeycode(state->_DPY, keys[i].keysym);
+        if(code == 0) continue;
+        for(size_t j = 0; j < sizeof(modifiers) / sizeof(modifiers[0]); j++){
+            XGrabKey(state->_DPY, code, keys[i].mod | modifiers[j], state->_ROOT, True, GrabModeAsync, GrabModeAsync);
+
+        }
+    }
 }
