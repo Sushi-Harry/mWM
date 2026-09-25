@@ -48,7 +48,7 @@ void initialize_core(WMState *state){
     printf("[mWM] Initialized on %s (%d, %d)\n", XDisplayName(NULL), state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT);
 
     // Grabkey call
-    grab_key(state, default_keys, default_keys_count);
+    grab_key(state, keys, KEYS_SIZE);
 }
 
 void event_loop_core(WMState *state){
@@ -113,32 +113,14 @@ void event_loop_core(WMState *state){
                 KeySym keysym = XLookupKeysym(kev, 0);
                 
                 unsigned int clean_state = kev->state & ~(LockMask | Mod2Mask);
-                for(size_t i = 0; i < default_keys_count; i++){
-                    if(keysym == default_keys[i]._KEYSYM && clean_state == default_keys[i]._MOD){
-                        switch (default_keys[i]._ACTION) {
-
-                        case ACTION_SPAWN:{
-                            if (default_keys[i]._ARG._COMMAND) {
-                                    spawn(default_keys[i]._ARG._COMMAND);
-                                }
-                            break;
-                        }
-                        case ACTION_KILL_CLIENT:{
-                            if(state->_CLIENTS){
-                                XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
-                            }
-                            break;
-                        }
-                        case ACTION_QUIT_WM:{
-                            state->_RUNNING = false;
-                            break;
-                        }
-                        case ACTION_FOCUS_NEXT:
-                        case ACTION_FOCUS_PREVIOUS:
-                          break;
-                        }
+                
+                for(size_t i = 0; i < KEYS_SIZE; i++){
+                    if(keysym == keys[i]._KEYSYM && clean_state == keys[i]._MOD && keys[i].func){
+                        keys[i].func(state, &keys[i]._ARG);
+                        break;
                     }
                 }
+                break;
             }
             default:
                 break;
@@ -174,7 +156,7 @@ void spawn(const char *command){
     For that we'll use the XKeySymToKeycode() function and then register the input with XGrabKey()
 */
 
-void grab_key(WMState* state, const KeyBinding* keys, size_t keys_count){
+void grab_key(WMState* state, const Key* keys, size_t keys_count){
     // ungrab any existing keys
     XUngrabKey(state->_DPY, AnyKey, AnyModifier, state->_ROOT);
     // This part is to ignore modifier keys such as Caps Lock, num lock, scroll lock etc.
@@ -188,4 +170,24 @@ void grab_key(WMState* state, const KeyBinding* keys, size_t keys_count){
 
         }
     }
+}
+
+// These are the definitions of the functions in config.h that are called when an action is supposed to take place
+void spawn_action(WMState *state, const Arg *arg){
+    (void)state;
+    if(arg->_COMMAND){
+        spawn(arg->_COMMAND);
+    }
+}
+
+void kill_action(WMState *state, const Arg *arg){
+    (void)arg;
+    if(state->_CLIENTS){
+        XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
+    }
+}
+
+void quit_wm_action(WMState *state, const Arg *arg) {
+    (void)arg;
+    state->_RUNNING = false;
 }

@@ -6,6 +6,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum{
+    ACTION_SPAWN,
+    ACTION_KILL_CLIENT,
+    ACTION_QUIT_WM,
+    ACTION_FOCUS_NEXT,
+    ACTION_FOCUS_PREVIOUS
+} WMAction;
+
 typedef struct {
     Display *_DPY;
     Window _ROOT;

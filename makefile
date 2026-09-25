@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+CFLAGS = -Wall -Wextra -std=c11 -Iinclude
 LIBS = -lX11
 
 SRCS = src/main.c src/core.c src/layout.c
