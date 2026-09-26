@@ -21,6 +21,7 @@ typedef struct {
     uint32_t _BORDER;
     unsigned long _BORDER_COLOR;
     Client *_CLIENTS;
+    Client *_FOCUSED;
     bool _RUNNING;
 } WMState;
 

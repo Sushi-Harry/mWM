@@ -34,12 +34,17 @@ typedef struct Key{
 void spawn_action(WMState *state, const Arg *arg);
 void kill_action(WMState *state, const Arg *arg);
 void quit_wm_action(WMState *state, const Arg *arg);
+// Window focus switching function signatures blah blah blah blah blah AAAAAAAAAAAAAAAAAAAAAAAAAAA
+void switch_next_action(WMState *state, const Arg *arg);
+void switch_prev_action(WMState *state, const Arg *arg);
 
 // This is an array for basic keybinds. The user will have to edit this config and recompile the project everytime if they wanna edit the keybinds
 // There's advantages to this but yeah I do understand that this isn't really a user friendly approach. But it's my project. I get to decide what philosophy I wanna follow
 static const Key keys[] = {
     { MOD_KEY | ShiftMask, XK_Return, spawn_action, { ._COMMAND="xterm"}},
     { MOD_KEY, XK_e, spawn_action, { ._COMMAND="thunar" }},
+    { MOD_KEY, XK_Right, switch_next_action, { ._COMMAND=NULL}},
+    { MOD_KEY, XK_Left, switch_prev_action, { ._COMMAND=NULL}},
     { MOD_KEY | ShiftMask, XK_c, kill_action, { ._COMMAND=NULL }},
     { MOD_KEY | ShiftMask, XK_q, quit_wm_action, { ._COMMAND=NULL }},
 };

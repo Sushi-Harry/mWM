@@ -12,6 +12,7 @@ void cleanup_core(WMState* state);
 
 // This is a helper function to spawn a window
 void spawn(const char *command);
+void focus_client(WMState *state, Client *client);
 
 // Key grabbing
 void grab_key(WMState* state, const struct Key* keys, size_t keys_count);

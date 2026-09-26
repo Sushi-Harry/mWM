@@ -22,6 +22,13 @@ static int x_error_handler(Display *dpy, XErrorEvent *ee){
     return 0;
 }
 
+static int x_io_error_handler(Display *dpy){
+    (void)dpy;
+    fprintf(stderr, "[mWM] Fatal: X Server connection lost (Xephyr closed).\n");
+    exit(EXIT_SUCCESS);
+    return 0;
+}
+
 void initialize_core(WMState *state){
     // Basically initializing the variables for the WMState *state variable
     state->_DPY = XOpenDisplay(NULL);
@@ -36,9 +43,12 @@ void initialize_core(WMState *state){
     state->_SCREEN_WIDTH = DisplayWidth(state->_DPY, DefaultScreen(state->_DPY));
     state->_SCREEN_HEIGHT = DisplayHeight(state->_DPY, DefaultScreen(state->_DPY));
     state->_RUNNING = true;
+    state->_CLIENTS = NULL;
+    state->_FOCUSED = NULL;
 
     // Set the error handler to the function I made earlier
     XSetErrorHandler(x_error_handler);
+    XSetIOErrorHandler(x_io_error_handler);
 
     // Telling X that windows will be managed by yours truly
     XSelectInput(state->_DPY, state->_ROOT, SubstructureRedirectMask | SubstructureNotifyMask);
@@ -86,6 +96,7 @@ void event_loop_core(WMState *state){
                 client->_FLOATING = false;
                 client->_NEXT = state->_CLIENTS;
                 state->_CLIENTS = client;
+                focus_client(state, client);
 
                 // Calling in the tiling function
                 layout_apply_tiling_algo(state);
@@ -96,16 +107,24 @@ void event_loop_core(WMState *state){
             case UnmapNotify:{
                 Window w = (xev.type == UnmapNotify) ? xev.xunmap.window : xev.xdestroywindow.window;
                 Client **pp = &state->_CLIENTS;
+                bool found = false;
                 while(*pp){
                     Client *curr = *pp;
                     if(curr->_WINDOW_ID == w){
                         *pp = curr->_NEXT;
+                        if(state->_FOCUSED == curr){
+                            state->_FOCUSED = NULL;
+                        }
                         free(curr);
+                        found = true;
                         break;
                     }
                     pp = &curr->_NEXT;
                 }
-                layout_apply_tiling_algo(state);
+                if(found){
+                    layout_apply_tiling_algo(state);
+                    focus_client(state, state->_CLIENTS);
+                }
                 break;
             }
             case KeyPress:{
@@ -171,6 +190,28 @@ void grab_key(WMState* state, const Key* keys, size_t keys_count){
         }
     }
 }
+void focus_client(WMState *state, Client *client){
+    if(!client){
+        // This runs when there's no such client as the one passed to the function
+        XSetInputFocus(state->_DPY, state->_ROOT, RevertToPointerRoot, CurrentTime);
+        state->_FOCUSED = NULL;
+        return;
+    }
+    state->_FOCUSED = client;
+    // updating the border colors
+    for(Client *curr = state->_CLIENTS; curr != NULL; curr = curr->_NEXT){
+        if(curr == client)
+            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, border_active);
+        else
+            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, border_inactive);
+    }
+
+    // Setting the focus to the client
+    XSetInputFocus(state->_DPY, client->_WINDOW_ID, RevertToPointerRoot, CurrentTime);
+    // Raise the window to the top of the stacking order
+    XRaiseWindow(state->_DPY, client->_WINDOW_ID);
+    
+}
 
 // These are the definitions of the functions in config.h that are called when an action is supposed to take place
 void spawn_action(WMState *state, const Arg *arg){
@@ -182,12 +223,42 @@ void spawn_action(WMState *state, const Arg *arg){
 
 void kill_action(WMState *state, const Arg *arg){
     (void)arg;
-    if(state->_CLIENTS){
-        XKillClient(state->_DPY, state->_CLIENTS->_WINDOW_ID);
+    if(state->_FOCUSED){
+        XKillClient(state->_DPY, state->_FOCUSED->_WINDOW_ID);
     }
 }
 
 void quit_wm_action(WMState *state, const Arg *arg) {
     (void)arg;
     state->_RUNNING = false;
+}
+
+// WWindow focus switching function definitions :)
+void switch_next_action(WMState *state, const Arg *arg){
+    (void)arg;
+    if(!state->_CLIENTS || !state->_FOCUSED) return;
+
+    // if the _NEXT field exists for the focused window put that as the next_target otherwist set it to the head of the clients linked list
+    Client *next_target = state->_FOCUSED->_NEXT ? state->_FOCUSED->_NEXT : state->_CLIENTS;
+    focus_client(state, next_target);
+}
+
+void switch_prev_action(WMState *state, const Arg *arg){
+    (void)arg;
+    if(!state->_CLIENTS || !state->_FOCUSED) return;
+
+    if(state->_FOCUSED == state->_CLIENTS){
+        Client *tail = state->_CLIENTS;
+        while (tail->_NEXT != NULL)
+            tail = tail->_NEXT;
+        focus_client(state, tail);
+    }else{
+        Client *prev = state->_CLIENTS;
+
+        while (prev != NULL && prev->_NEXT != state->_FOCUSED)
+            prev = prev->_NEXT;
+        if(prev)
+            focus_client(state, prev);
+    }
+
 }
