@@ -23,6 +23,7 @@ typedef struct {
     Client *_CLIENTS;
     Client *_FOCUSED;
     bool _RUNNING;
+    uint32_t _CURRENT_TAG;
 } WMState;
 
 #endif

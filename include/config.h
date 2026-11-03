@@ -37,6 +37,8 @@ void quit_wm_action(WMState *state, const Arg *arg);
 // Window focus switching function signatures blah blah blah blah blah AAAAAAAAAAAAAAAAAAAAAAAAAAA
 void switch_next_action(WMState *state, const Arg *arg);
 void switch_prev_action(WMState *state, const Arg *arg);
+void view_tag_action(WMState *state, const Arg *arg);
+void move_tag_action(WMState *state, const Arg *arg);
 
 // This is an array for basic keybinds. The user will have to edit this config and recompile the project everytime if they wanna edit the keybinds
 // There's advantages to this but yeah I do understand that this isn't really a user friendly approach. But it's my project. I get to decide what philosophy I wanna follow
@@ -47,6 +49,25 @@ static const Key keys[] = {
     { MOD_KEY, XK_Left, switch_prev_action, { ._COMMAND=NULL}},
     { MOD_KEY | ShiftMask, XK_c, kill_action, { ._COMMAND=NULL }},
     { MOD_KEY | ShiftMask, XK_q, quit_wm_action, { ._COMMAND=NULL }},
+    // WORKSPACE NAVIGATION STUFF
+    { MOD_KEY, XK_1, view_tag_action, {.i = 1 }},
+    { MOD_KEY | ShiftMask, XK_1, move_tag_action, { .i = 1 }},
+    { MOD_KEY, XK_2, view_tag_action, {.i = 2 }},
+    { MOD_KEY | ShiftMask, XK_2, move_tag_action, { .i = 2 }},
+    { MOD_KEY, XK_3, view_tag_action, {.i = 3 }},
+    { MOD_KEY | ShiftMask, XK_3, move_tag_action, { .i = 3 }},
+    { MOD_KEY, XK_4, view_tag_action, {.i = 4 }},
+    { MOD_KEY | ShiftMask, XK_4, move_tag_action, { .i = 4 }},
+    { MOD_KEY, XK_5, view_tag_action, {.i = 5 }},
+    { MOD_KEY | ShiftMask, XK_5, move_tag_action, { .i = 5 }},
+    { MOD_KEY, XK_6, view_tag_action, {.i = 6 }},
+    { MOD_KEY | ShiftMask, XK_6, move_tag_action, { .i = 6 }},
+    { MOD_KEY, XK_7, view_tag_action, {.i = 7 }},
+    { MOD_KEY | ShiftMask, XK_7, move_tag_action, { .i = 7 }},
+    { MOD_KEY, XK_8, view_tag_action, {.i = 8 }},
+    { MOD_KEY | ShiftMask, XK_8, move_tag_action, { .i = 8 }},
+    { MOD_KEY, XK_9, view_tag_action, {.i = 9 }},
+    { MOD_KEY | ShiftMask, XK_9, move_tag_action, { .i = 9 }},
 };
 
 // static const size_t default_keys_count = sizeof(default_keys) / sizeof(default_keys[0]);

@@ -8,8 +8,7 @@ typedef struct Client{
     int _WINDOW_ID;
     bool _FLOATING;
     unsigned int _W, _H, _X, _Y;
-    unsigned int _TAGS; // Have to decide what this could be used for. Could be used to store the workspace that the client window is in right now
-    
+    unsigned int _TAG;
     struct Client* _NEXT;
 }Client;
 

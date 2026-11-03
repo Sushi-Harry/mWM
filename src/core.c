@@ -95,6 +95,7 @@ void event_loop_core(WMState *state){
                 client->_X = 0; client->_Y = 0; client->_W = 400; client->_H = 300;
                 client->_FLOATING = false;
                 client->_NEXT = state->_CLIENTS;
+                client->_TAG = state->_CURRENT_TAG;
                 state->_CLIENTS = client;
                 focus_client(state, client);
 
@@ -185,7 +186,7 @@ void grab_key(WMState* state, const Key* keys, size_t keys_count){
         KeyCode code = XKeysymToKeycode(state->_DPY, keys[i]._KEYSYM);
         if(code == 0) continue;
         for(size_t j = 0; j < sizeof(modifiers) / sizeof(modifiers[0]); j++){
-            XGrabKey(state->_DPY, code, keys[i]._MOD | modifiers[j], state->_ROOT, True, GrabModeAsync, GrabModeAsync);
+            XGrabKey(state->_DPY, code, keys[i]._MOD | modifiers[j], state->_ROOT, False, GrabModeAsync, GrabModeAsync);
 
         }
     }
@@ -261,4 +262,29 @@ void switch_prev_action(WMState *state, const Arg *arg){
             focus_client(state, prev);
     }
 
+}
+
+void view_tag_action(WMState *state, const Arg *arg){
+    if(arg->i == state->_CURRENT_TAG) return;
+
+    state->_CURRENT_TAG = arg->i;
+    layout_apply_tiling_algo(state);
+
+    Client *target = NULL;
+    for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+        if(curr->_TAG == state->_CURRENT_TAG){
+            target = curr;
+            break;
+        }
+    }
+    focus_client(state, target);
+}
+
+void move_tag_action(WMState* state, const Arg *arg){
+    if(state->_FOCUSED && arg->i != state->_CURRENT_TAG){
+        state->_FOCUSED->_TAG = arg->i;
+        layout_apply_tiling_algo(state);
+
+        // view_tag_action(state, &(Arg){.i = state->_CURRENT_TAG});
+    }
 }
