@@ -16,4 +16,8 @@ void focus_client(WMState *state, Client *client);
 
 // Key grabbing
 void grab_key(WMState* state, const struct Key* keys, size_t keys_count);
+
+// This one updates the top bar
+void update_bar(WMState *state);
+
 #endif

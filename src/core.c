@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <X11/Xproto.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <X11/keysym.h>
 #include "../include/config.h"
+#include <X11/Xatom.h>
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
 static int x_error_handler(Display *dpy, XErrorEvent *ee){
@@ -65,6 +67,7 @@ void initialize_core(WMState *state){
     state->_GC = XCreateGC(state->_DPY, state->_BAR, 0, NULL);
     XSetForeground(state->_DPY, state->_GC, WhitePixel(state->_DPY, XDefaultScreen(state->_DPY)));
     XMapRaised(state->_DPY, state->_BAR);
+    update_bar(state);
 
     // Grabkey call
     grab_key(state, keys, KEYS_SIZE);
@@ -99,6 +102,8 @@ void event_loop_core(WMState *state){
                 // Now mapping the actual window
                 XMapWindow(state->_DPY, mev->window);
 
+                XSelectInput(state->_DPY, mev->window, PropertyChangeMask);
+
                 Client *client = malloc(sizeof(Client));
                 client->_WINDOW_ID = mev->window;
                 client->_X = 0; client->_Y = 0; client->_W = 400; client->_H = 300;
@@ -109,6 +114,7 @@ void event_loop_core(WMState *state){
                 focus_client(state, client);
 
                 // Calling in the tiling function
+                focus_client(state, client);
                 layout_apply_tiling_algo(state);
 
                 break;
@@ -151,6 +157,13 @@ void event_loop_core(WMState *state){
                 }
                 break;
             }
+            case PropertyNotify:{
+                XPropertyEvent *ev = &xev.xproperty;
+                if(ev->atom == XA_WM_NAME && state->_FOCUSED && ev->window == state->_FOCUSED->_WINDOW_ID){
+                    update_bar(state);
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -176,6 +189,28 @@ void spawn(const char *command){
         exit(EXIT_SUCCESS);
     }
     wait(NULL);
+}
+// This is for the taskbar at the top. Basically, the taskbar is just a window made using X11 with custom text being displayed on it
+void update_bar(WMState *state){
+    if(!state->_BAR) return;
+
+    XClearWindow(state->_DPY, state->_BAR);
+
+    // This is the string that needs to be displayed on the bar
+    char text[512];
+    char *window_name = NULL;
+
+    if(state->_FOCUSED){
+        XFetchName(state->_DPY, state->_FOCUSED->_WINDOW_ID, &window_name);
+    }
+    snprintf(text, sizeof(text), "Workspace %d | %s" , state->_CURRENT_TAG, window_name ? window_name : (state->_FOCUSED ? "Unknown" : ""));
+
+    if(window_name){
+        XFree(window_name);
+    }
+    // drawing the text on the x11 window
+    XDrawString(state->_DPY, state->_BAR, state->_GC, 10, (BAR_HEIGHT / 2) + 4, text, strlen(text));
+    XFlush(state->_DPY);
 }
 
 // Here's some explanation
@@ -205,6 +240,7 @@ void focus_client(WMState *state, Client *client){
         // This runs when there's no such client as the one passed to the function
         XSetInputFocus(state->_DPY, state->_ROOT, RevertToPointerRoot, CurrentTime);
         state->_FOCUSED = NULL;
+        update_bar(state);
         return;
     }
     state->_FOCUSED = client;
@@ -220,6 +256,8 @@ void focus_client(WMState *state, Client *client){
     XSetInputFocus(state->_DPY, client->_WINDOW_ID, RevertToPointerRoot, CurrentTime);
     // Raise the window to the top of the stacking order
     XRaiseWindow(state->_DPY, client->_WINDOW_ID);
+
+    update_bar(state);
     
 }
 
