@@ -9,6 +9,8 @@
 #include <X11/keysym.h>
 #include "../include/config.h"
 #include <X11/Xatom.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <time.h>
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
@@ -75,97 +77,118 @@ void initialize_core(WMState *state){
 }
 void event_loop_core(WMState *state){
     XEvent xev;
-    while(state->_RUNNING && !XNextEvent(state->_DPY, &xev)){
-        // Event handling will be done here
-        switch (xev.type) {
-            // This is the window configure request event being handled
-            case ConfigureRequest:{
-                XConfigureRequestEvent *ev = &xev.xconfigurerequest;
-                XWindowChanges wc;
-                wc.x = ev->x;
-                wc.y = ev->y;
-                wc.width = ev->width;
-                wc.height = ev->height;
-                wc.border_width = ev->border_width;
-                wc.sibling = ev->above;
-                wc.stack_mode = ev->detail;
+    int x11_fd = ConnectionNumber(state->_DPY);
 
-                // Applying the changes tot he xserver
-                XConfigureWindow(state->_DPY, ev->window, ev->value_mask, &wc);
-                break;
-            }
-            case MapRequest:{
-                XMapRequestEvent *mev = &xev.xmaprequest;
-                // This is for adding a border so that the windows are visible
-                XSetWindowBorderWidth(state->_DPY, mev->window, state->_BORDER);
-                XSetWindowBorder(state->_DPY, mev->window, state->_BORDER_COLOR); // that last argument is just the color code in hex
-                // Now mapping the actual window
-                XMapWindow(state->_DPY, mev->window);
+    while(state->_RUNNING){
+        while (XPending(state->_DPY)) {
+            XNextEvent(state->_DPY, &xev);
+        
+            // Event handling will be done here
+            switch (xev.type) {
+                // This is the window configure request event being handled
+                case ConfigureRequest:{
+                    XConfigureRequestEvent *ev = &xev.xconfigurerequest;
+                    XWindowChanges wc;
+                    wc.x = ev->x;
+                    wc.y = ev->y;
+                    wc.width = ev->width;
+                    wc.height = ev->height;
+                    wc.border_width = ev->border_width;
+                    wc.sibling = ev->above;
+                    wc.stack_mode = ev->detail;
 
-                XSelectInput(state->_DPY, mev->window, PropertyChangeMask);
-
-                Client *client = malloc(sizeof(Client));
-                client->_WINDOW_ID = mev->window;
-                client->_X = 0; client->_Y = 0; client->_W = 400; client->_H = 300;
-                client->_FLOATING = false;
-                client->_NEXT = state->_CLIENTS;
-                client->_TAG = state->_CURRENT_TAG;
-                state->_CLIENTS = client;
-                focus_client(state, client);
-
-                // Calling in the tiling function
-                focus_client(state, client);
-                layout_apply_tiling_algo(state);
-
-                break;
-            }
-            case DestroyNotify:
-            case UnmapNotify:{
-                Window w = (xev.type == UnmapNotify) ? xev.xunmap.window : xev.xdestroywindow.window;
-                Client **pp = &state->_CLIENTS;
-                bool found = false;
-                while(*pp){
-                    Client *curr = *pp;
-                    if(curr->_WINDOW_ID == w){
-                        *pp = curr->_NEXT;
-                        if(state->_FOCUSED == curr){
-                            state->_FOCUSED = NULL;
-                        }
-                        free(curr);
-                        found = true;
-                        break;
-                    }
-                    pp = &curr->_NEXT;
+                    // Applying the changes tot he xserver
+                    XConfigureWindow(state->_DPY, ev->window, ev->value_mask, &wc);
+                    break;
                 }
-                if(found){
+                case MapRequest:{
+                    XMapRequestEvent *mev = &xev.xmaprequest;
+                    // This is for adding a border so that the windows are visible
+                    XSetWindowBorderWidth(state->_DPY, mev->window, state->_BORDER);
+                    XSetWindowBorder(state->_DPY, mev->window, state->_BORDER_COLOR); // that last argument is just the color code in hex
+                    // Now mapping the actual window
+                    XMapWindow(state->_DPY, mev->window);
+
+                    XSelectInput(state->_DPY, mev->window, PropertyChangeMask);
+
+                    Client *client = malloc(sizeof(Client));
+                    client->_WINDOW_ID = mev->window;
+                    client->_X = 0; client->_Y = 0; client->_W = 400; client->_H = 300;
+                    client->_FLOATING = false;
+                    client->_NEXT = state->_CLIENTS;
+                    client->_TAG = state->_CURRENT_TAG;
+                    state->_CLIENTS = client;
+                    focus_client(state, client);
+
+                    // Calling in the tiling function
+                    focus_client(state, client);
                     layout_apply_tiling_algo(state);
-                    focus_client(state, state->_CLIENTS);
+
+                    break;
                 }
-                break;
-            }
-            case KeyPress:{
-                XKeyEvent *kev = &xev.xkey;
-                KeySym keysym = XLookupKeysym(kev, 0);
-                
-                unsigned int clean_state = kev->state & ~(LockMask | Mod2Mask);
-                
-                for(size_t i = 0; i < KEYS_SIZE; i++){
-                    if(keysym == keys[i]._KEYSYM && clean_state == keys[i]._MOD && keys[i].func){
-                        keys[i].func(state, &keys[i]._ARG);
-                        break;
+                case DestroyNotify:
+                case UnmapNotify:{
+                    Window w = (xev.type == UnmapNotify) ? xev.xunmap.window : xev.xdestroywindow.window;
+                    Client **pp = &state->_CLIENTS;
+                    bool found = false;
+                    while(*pp){
+                        Client *curr = *pp;
+                        if(curr->_WINDOW_ID == w){
+                            *pp = curr->_NEXT;
+                            if(state->_FOCUSED == curr){
+                                state->_FOCUSED = NULL;
+                            }
+                            free(curr);
+                            found = true;
+                            break;
+                        }
+                        pp = &curr->_NEXT;
                     }
+                    if(found){
+                        layout_apply_tiling_algo(state);
+                        focus_client(state, state->_CLIENTS);
+                    }
+                    break;
                 }
-                break;
-            }
-            case PropertyNotify:{
-                XPropertyEvent *ev = &xev.xproperty;
-                if(ev->atom == XA_WM_NAME && state->_FOCUSED && ev->window == state->_FOCUSED->_WINDOW_ID){
-                    update_bar(state);
+                case KeyPress:{
+                    XKeyEvent *kev = &xev.xkey;
+                    KeySym keysym = XLookupKeysym(kev, 0);
+                    
+                    unsigned int clean_state = kev->state & ~(LockMask | Mod2Mask);
+                    
+                    for(size_t i = 0; i < KEYS_SIZE; i++){
+                        if(keysym == keys[i]._KEYSYM && clean_state == keys[i]._MOD && keys[i].func){
+                            keys[i].func(state, &keys[i]._ARG);
+                            break;
+                        }
+                    }
+                    break;
                 }
-                break;
+                case PropertyNotify:{
+                    XPropertyEvent *ev = &xev.xproperty;
+                    if(ev->atom == XA_WM_NAME && state->_FOCUSED && ev->window == state->_FOCUSED->_WINDOW_ID){
+                        update_bar(state);
+                    }
+                    break;
+                }
+                default:
+                    break;
             }
-            default:
-                break;
+        }
+
+        fd_set in_fds;
+        FD_ZERO(&in_fds);
+        FD_SET(x11_fd, &in_fds);
+
+        struct timeval tval;
+        tval.tv_sec = 1;
+        tval.tv_usec = 0;
+
+        int num_ready = select(x11_fd + 1, &in_fds, NULL, NULL, &tval);
+        if(num_ready == 0){
+            update_bar(state);
+        }else if(num_ready < 0){
+            perror("[mWM] select() error");
         }
     }
 }
