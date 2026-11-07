@@ -45,6 +45,7 @@ void initialize_core(WMState *state){
     state->_RUNNING = true;
     state->_CLIENTS = NULL;
     state->_FOCUSED = NULL;
+    state->_CURRENT_TAG = 1;
 
     // Set the error handler to the function I made earlier
     XSetErrorHandler(x_error_handler);
@@ -240,28 +241,42 @@ void switch_next_action(WMState *state, const Arg *arg){
     if(!state->_CLIENTS || !state->_FOCUSED) return;
 
     // if the _NEXT field exists for the focused window put that as the next_target otherwist set it to the head of the clients linked list
-    Client *next_target = state->_FOCUSED->_NEXT ? state->_FOCUSED->_NEXT : state->_CLIENTS;
-    focus_client(state, next_target);
+    // Client *next_target = state->_FOCUSED->_NEXT ? state->_FOCUSED->_NEXT : state->_CLIENTS;
+    Client *next = NULL;
+    Client *current_master = NULL;
+    for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+        if(curr->_TAG == state->_CURRENT_TAG){
+            current_master = curr;
+            break;
+        }
+    }
+    next = state->_FOCUSED->_NEXT && state->_FOCUSED->_NEXT->_TAG == state->_CURRENT_TAG ? state->_FOCUSED->_NEXT : current_master; 
+    focus_client(state, next);
 }
 
 void switch_prev_action(WMState *state, const Arg *arg){
     (void)arg;
     if(!state->_CLIENTS || !state->_FOCUSED) return;
 
-    if(state->_FOCUSED == state->_CLIENTS){
-        Client *tail = state->_CLIENTS;
-        while (tail->_NEXT != NULL)
-            tail = tail->_NEXT;
-        focus_client(state, tail);
-    }else{
-        Client *prev = state->_CLIENTS;
+    Client *target = NULL, *prev_match = NULL, *last_in_workspace = NULL;
 
-        while (prev != NULL && prev->_NEXT != state->_FOCUSED)
-            prev = prev->_NEXT;
-        if(prev)
-            focus_client(state, prev);
+    for(Client* curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+        if(curr->_TAG ==state->_CURRENT_TAG){
+            if(curr == state->_FOCUSED){
+                target = prev_match;
+            }
+
+            prev_match = curr;
+            last_in_workspace = curr;
+        }
     }
 
+    if(!target){
+        target = last_in_workspace;
+    }
+    if(target){
+        focus_client(state, target);
+    }
 }
 
 void view_tag_action(WMState *state, const Arg *arg){
@@ -286,5 +301,6 @@ void move_tag_action(WMState* state, const Arg *arg){
         layout_apply_tiling_algo(state);
 
         // view_tag_action(state, &(Arg){.i = state->_CURRENT_TAG});
+
     }
 }
