@@ -9,6 +9,7 @@
 #include <X11/keysym.h>
 #include "../include/config.h"
 #include <X11/Xatom.h>
+#include <time.h>
 
 // This function handles the errors in case a window misbehaves so that the windowmanager doesn't instantly crash
 static int x_error_handler(Display *dpy, XErrorEvent *ee){
@@ -72,7 +73,6 @@ void initialize_core(WMState *state){
     // Grabkey call
     grab_key(state, keys, KEYS_SIZE);
 }
-
 void event_loop_core(WMState *state){
     XEvent xev;
     while(state->_RUNNING && !XNextEvent(state->_DPY, &xev)){
@@ -169,14 +169,12 @@ void event_loop_core(WMState *state){
         }
     }
 }
-
 void cleanup_core(WMState *state){
     if(state->_DPY){
         XCloseDisplay(state->_DPY);
     }
     printf("[mWM] Shutting Down\n");
 }
-
 void spawn(const char *command){
     if(fork() == 0){
         if(fork() == 0){
@@ -197,19 +195,33 @@ void update_bar(WMState *state){
     XClearWindow(state->_DPY, state->_BAR);
 
     // This is the string that needs to be displayed on the bar
-    char text[512];
+    char text_left[512];
     char *window_name = NULL;
 
     if(state->_FOCUSED){
         XFetchName(state->_DPY, state->_FOCUSED->_WINDOW_ID, &window_name);
     }
-    snprintf(text, sizeof(text), "Workspace %d | %s" , state->_CURRENT_TAG, window_name ? window_name : (state->_FOCUSED ? "Unknown" : ""));
+    snprintf(text_left, sizeof(text_left), "Workspace %d | %s" , state->_CURRENT_TAG, window_name ? window_name : (state->_FOCUSED ? "Unknown" : ""));
 
     if(window_name){
         XFree(window_name);
     }
-    // drawing the text on the x11 window
-    XDrawString(state->_DPY, state->_BAR, state->_GC, 10, (BAR_HEIGHT / 2) + 4, text, strlen(text));
+    
+    // This part is for drawing the time
+    time_t rawtime;
+    struct tm *timeinfo;
+    char time_str[64];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(time_str, sizeof(time_str), "%a, %b %d  %H:%M", timeinfo);
+
+    // drawing the left side of the bar. Workspace nd the title
+    XDrawString(state->_DPY, state->_BAR, state->_GC, 10, (BAR_HEIGHT / 2) + 4, text_left, strlen(text_left));
+    // drawing the time on the right side
+    int time_x = state->_SCREEN_WIDTH - 150;
+    XDrawString(state->_DPY, state->_BAR, state->_GC, time_x, (BAR_HEIGHT / 2) + 4, time_str, strlen(time_str));
+
     XFlush(state->_DPY);
 }
 
