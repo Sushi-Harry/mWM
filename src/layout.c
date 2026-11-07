@@ -1,5 +1,6 @@
 #include "../include/layout.h"
 #include <X11/Xlib.h>
+#include "../include/config.h"
 
 // void layout_apply_tiling_algo(WMState *state){
 //     if(!state->_CLIENTS) return;
@@ -51,9 +52,12 @@ void layout_apply_tiling_algo(WMState *state){
             count++;
     }
 
+    int avail_y = BAR_HEIGHT;
+    int avail_h = state->_SCREEN_HEIGHT - BAR_HEIGHT;
+
     int master_w = (count == 1) ? state->_SCREEN_WIDTH : (state->_SCREEN_WIDTH / 2);
     int stack_w = state->_SCREEN_WIDTH - master_w;
-    int stack_h = (count > 1) ? (state->_SCREEN_HEIGHT / (count - 1)) : 0;
+    int stack_h = (count > 1) ? (avail_h / (count - 1)) : 0;
 
     int i = 0;
     for(Client* curr = state->_CLIENTS; curr; curr = curr->_NEXT){
@@ -64,10 +68,10 @@ void layout_apply_tiling_algo(WMState *state){
         }
         // REST OF THE FUNCTION IS THE SAME AS BEFORE
         if(i == 0){
-            curr->_X = 0; curr->_Y = 0;
-            curr->_W = master_w; curr->_H = state->_SCREEN_HEIGHT;
+            curr->_X = 0; curr->_Y = avail_y;
+            curr->_W = master_w; curr->_H = avail_h;
         }else{
-            curr->_X = master_w; curr->_Y = (i - 1) * stack_h;
+            curr->_X = master_w; curr->_Y = avail_y + ((i - 1) * stack_h);
             curr->_W = stack_w; curr->_H = stack_h;
         }
         XMoveResizeWindow(state->_DPY, curr->_WINDOW_ID, curr->_X, curr->_Y, curr->_W - (2 * state->_BORDER), curr->_H - (2 * state->_BORDER));

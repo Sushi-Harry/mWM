@@ -9,6 +9,7 @@
 #include "wm.h"
 
 #define MOD_KEY Mod1Mask
+#define BAR_HEIGHT 30
 
 static const unsigned int border_width = 2;
 static const unsigned long border_inactive = 0x444444; 

@@ -24,6 +24,12 @@ typedef struct {
     Client *_FOCUSED;
     bool _RUNNING;
     uint32_t _CURRENT_TAG;
+
+    Window _BAR;
+    GC _GC;
+
+    Atom _WM_PROTOCOLS;
+    Atom _WM_DELETE_WINDOW;
 } WMState;
 
 #endif

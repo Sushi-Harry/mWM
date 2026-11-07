@@ -40,6 +40,8 @@ void initialize_core(WMState *state){
     }
     /// Past this point the program runs if the display was initialized without issues
     state->_ROOT = DefaultRootWindow(state->_DPY);
+    state->_WM_PROTOCOLS = XInternAtom(state->_DPY, "WM_PROTOCOLS", False);
+    state->_WM_DELETE_WINDOW = XInternAtom(state->_DPY, "WM_DELETE_WINDOW", False);
     state->_SCREEN_WIDTH = DisplayWidth(state->_DPY, DefaultScreen(state->_DPY));
     state->_SCREEN_HEIGHT = DisplayHeight(state->_DPY, DefaultScreen(state->_DPY));
     state->_RUNNING = true;
@@ -57,6 +59,12 @@ void initialize_core(WMState *state){
 
     // Print into the console that the window and stuff was initialized successfully
     printf("[mWM] Initialized on %s (%d, %d)\n", XDisplayName(NULL), state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT);
+
+    // Creating the taskbar
+    state->_BAR = XCreateSimpleWindow(state->_DPY, state->_ROOT, 0, 0, state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT, 0, BlackPixel(state->_DPY, DefaultScreen(state->_DPY)), border_inactive);
+    state->_GC = XCreateGC(state->_DPY, state->_BAR, 0, NULL);
+    XSetForeground(state->_DPY, state->_GC, WhitePixel(state->_DPY, XDefaultScreen(state->_DPY)));
+    XMapRaised(state->_DPY, state->_BAR);
 
     // Grabkey call
     grab_key(state, keys, KEYS_SIZE);
@@ -225,8 +233,35 @@ void spawn_action(WMState *state, const Arg *arg){
 
 void kill_action(WMState *state, const Arg *arg){
     (void)arg;
-    if(state->_FOCUSED){
-        XKillClient(state->_DPY, state->_FOCUSED->_WINDOW_ID);
+    if(!state->_FOCUSED) return;
+
+    Window w = state->_FOCUSED->_WINDOW_ID;
+    int n;
+    Atom *protocols = NULL;
+    bool supports_delete = false;
+
+    if(XGetWMProtocols(state->_DPY, w, &protocols, &n)){
+        for(int i = 0; i < n; i++){
+            if(protocols[i] == state->_WM_DELETE_WINDOW){
+                supports_delete = true;
+                break;
+            }
+        }
+        XFree(protocols);
+    }
+
+    if(supports_delete){
+        XEvent ev;
+        ev.type = ClientMessage;
+        ev.xclient.window = w;
+        ev.xclient.message_type = state->_WM_PROTOCOLS;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = state->_WM_DELETE_WINDOW;
+        ev.xclient.data.l[1] = CurrentTime;
+
+        XSendEvent(state->_DPY, w, False, NoEventMask, &ev);
+    }else{
+        XKillClient(state->_DPY, w);
     }
 }
 
