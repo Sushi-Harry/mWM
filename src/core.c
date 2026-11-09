@@ -34,6 +34,41 @@ static int x_io_error_handler(Display *dpy){
     return 0;
 }
 
+// THese are helper functions for EWMH Compliance
+void ewmh_update_active_window(WMState *state){
+    Window w = state->_FOCUSED ? state->_FOCUSED->_WINDOW_ID : None;
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_ACTIVE_WINDOW, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&w, 1);
+}
+
+void ewmh_update_client_list(WMState *state){
+    int count = 0;
+    for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT) count++;
+
+    if(count == 0){
+        XDeleteProperty(state->_DPY, state->_ROOT, state->_NET_CLIENT_LIST);
+        return;
+    }
+
+    Window *windows = malloc(sizeof(Window) * count);
+    if(!windows) return;
+
+    int i = 0;
+    for(Client *c = state->_CLIENTS; c; c = c->_NEXT){
+        windows[i] = c->_WINDOW_ID;
+        i++;
+    }
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_CLIENT_LIST, XA_WINDOW, 32, PropModeReplace, (unsigned char*)windows, count);
+    free(windows);
+}
+
+void ewmh_update_desktop(WMState *state){
+    long current_desktop = (long)(state->_CURRENT_TAG - 1);
+    long total_desktops = 9;
+
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_CURRENT_DESKTOP, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&current_desktop, 1);
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_NUMBER_OF_DESKTOPS, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&total_desktops, 1);
+}
+
 void initialize_core(WMState *state){
     // Basically initializing the variables for the WMState *state variable
     state->_DPY = XOpenDisplay(NULL);
@@ -54,6 +89,33 @@ void initialize_core(WMState *state){
     state->_CLIENTS = NULL;
     state->_FOCUSED = NULL;
     state->_CURRENT_TAG = 1;
+
+    state->_NET_SUPPORTED = XInternAtom(state->_DPY, "_NET_SUPPORTED", False);
+    state->_NET_CLIENT_LIST = XInternAtom(state->_DPY, "_NET_CLIENT_LIST", False);
+    state->_NET_NUMBER_OF_DESKTOPS = XInternAtom(state->_DPY, "_NET_NUMBER_OF_DESKTOPS", False);
+    state->_NET_CURRENT_DESKTOP = XInternAtom(state->_DPY, "_NET_CURRENT_DESKTOP", False);
+    state->_NET_ACTIVE_WINDOW = XInternAtom(state->_DPY, "_NET_ACTIVE_WINDOW", False);
+    state->_NET_WM_NAME = XInternAtom(state->_DPY, "_NET_WM_NAME", False);
+    state->_NET_SUPPORTING_WM_CHECK = XInternAtom(state->_DPY, "_NET_SUPPORTING_WM_CHECK", False);
+    state->_UTF8_STRING = XInternAtom(state->_DPY, "UTF8_STRING", False);
+
+    Window check_win = XCreateSimpleWindow(state->_DPY, state->_ROOT, 0, 0, 1, 1, 0, 0, 0);
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_SUPPORTING_WM_CHECK, XA_WINDOW, 32, PropModeReplace, (unsigned char *)&check_win, 1);
+    XChangeProperty(state->_DPY, check_win, state->_NET_SUPPORTING_WM_CHECK, XA_WINDOW, 32, PropModeReplace, (unsigned char *)&check_win, 1);
+    XChangeProperty(state->_DPY, check_win, state->_NET_WM_NAME, state->_UTF8_STRING, 8, PropModeReplace, (unsigned char *)"mWM", 3);
+
+    Atom net_atom[] = {
+        state->_NET_SUPPORTED,
+        state->_NET_CLIENT_LIST,
+        state->_NET_NUMBER_OF_DESKTOPS,
+        state->_NET_CURRENT_DESKTOP,
+        state->_NET_ACTIVE_WINDOW,
+        state->_NET_WM_NAME,
+        state->_NET_SUPPORTING_WM_CHECK
+    };
+    XChangeProperty(state->_DPY, state->_ROOT, state->_NET_SUPPORTED, XA_ATOM, 32, PropModeReplace, (unsigned char *)net_atom, sizeof(net_atom) / sizeof(Atom));
+    ewmh_update_desktop(state);
+    ewmh_update_active_window(state);
 
     // Set the error handler to the function I made earlier
     XSetErrorHandler(x_error_handler);
@@ -123,6 +185,7 @@ void event_loop_core(WMState *state){
                     client->_NEXT = state->_CLIENTS;
                     client->_TAG = state->_CURRENT_TAG;
                     state->_CLIENTS = client;
+                    ewmh_update_client_list(state);
                     focus_client(state, client);
 
                     // Calling in the tiling function
@@ -150,8 +213,16 @@ void event_loop_core(WMState *state){
                         pp = &curr->_NEXT;
                     }
                     if(found){
+                        ewmh_update_client_list(state);
                         layout_apply_tiling_algo(state);
-                        focus_client(state, state->_CLIENTS);
+                        Client* target = NULL;
+                        for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+                            if(curr->_TAG == state->_CURRENT_TAG){
+                                target = curr;
+                                break;
+                            }
+                        }
+                        focus_client(state, target);
                     }
                     break;
                 }
@@ -380,10 +451,15 @@ void focus_client(WMState *state, Client *client){
     if(XQueryPointer(state->_DPY, client->_WINDOW_ID, &root_ret, &child_ret, &rx, &ry, &wx, &wy, &mask)){
         if(wx < 0 || wy < 0 || wx > client->_W || wy > client->_H){
             XWarpPointer(state->_DPY, None, client->_WINDOW_ID, 0, 0, 0, 0, client->_W / 2, client->_H / 2);
+
+            XSync(state->_DPY, False);
+            XEvent ignore_ev;
+            while(XCheckMaskEvent(state->_DPY, EnterWindowMask, &ignore_ev));
         }
     }
 
-    update_bar(state);    
+    update_bar(state);
+    ewmh_update_active_window(state);   
 }
 
 // These are the definitions of the functions in config.h that are called when an action is supposed to take place
@@ -490,6 +566,7 @@ void view_tag_action(WMState *state, const Arg *arg){
             break;
         }
     }
+    ewmh_update_desktop(state);
     focus_client(state, target);
 }
 

@@ -32,6 +32,17 @@ typedef struct {
 
     Atom _WM_PROTOCOLS;
     Atom _WM_DELETE_WINDOW;
+
+    // EWMH Atoms
+    Atom _NET_SUPPORTED;
+    Atom _NET_CLIENT_LIST;
+    Atom _NET_NUMBER_OF_DESKTOPS;
+    Atom _NET_CURRENT_DESKTOP;
+    Atom _NET_ACTIVE_WINDOW;
+    Atom _NET_WM_NAME;
+    Atom _NET_SUPPORTING_WM_CHECK;
+    Atom _UTF8_STRING;
+
 } WMState;
 
 #endif
