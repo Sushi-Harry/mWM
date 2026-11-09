@@ -114,7 +114,7 @@ void event_loop_core(WMState *state){
                     // Now mapping the actual window
                     XMapWindow(state->_DPY, mev->window);
 
-                    XSelectInput(state->_DPY, mev->window, PropertyChangeMask);
+                    XSelectInput(state->_DPY, mev->window, PropertyChangeMask | EnterWindowMask);
 
                     Client *client = malloc(sizeof(Client));
                     client->_WINDOW_ID = mev->window;
@@ -224,6 +224,23 @@ void event_loop_core(WMState *state){
                     if(drag_client){
                         XUngrabPointer(state->_DPY, CurrentTime);
                         drag_client = NULL;
+                    }
+                    break;
+                }
+                case EnterNotify:{
+                    XEnterWindowEvent *ev = &xev.xcrossing;
+
+                    if(ev->mode != NotifyNormal || ev->detail == NotifyInferior) break;
+
+                    Client *c = NULL;
+                    for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+                        if(curr->_WINDOW_ID == ev->window){
+                            c = curr;
+                            break;
+                        }
+                    }
+                    if(c && state->_FOCUSED != c){
+                        focus_client(state, c);
                     }
                     break;
                 }
@@ -356,8 +373,17 @@ void focus_client(WMState *state, Client *client){
     // Raise the window to the top of the stacking order
     XRaiseWindow(state->_DPY, client->_WINDOW_ID);
 
-    update_bar(state);
-    
+    Window root_ret, child_ret;
+    int rx, ry, wx, wy;
+    unsigned int mask;
+
+    if(XQueryPointer(state->_DPY, client->_WINDOW_ID, &root_ret, &child_ret, &rx, &ry, &wx, &wy, &mask)){
+        if(wx < 0 || wy < 0 || wx > client->_W || wy > client->_H){
+            XWarpPointer(state->_DPY, None, client->_WINDOW_ID, 0, 0, 0, 0, client->_W / 2, client->_H / 2);
+        }
+    }
+
+    update_bar(state);    
 }
 
 // These are the definitions of the functions in config.h that are called when an action is supposed to take place
