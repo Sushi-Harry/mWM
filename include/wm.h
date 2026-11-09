@@ -28,6 +28,8 @@ typedef struct {
     Window _BAR;
     GC _GC;
 
+    float _MASTER_RATIO;
+
     Atom _WM_PROTOCOLS;
     Atom _WM_DELETE_WINDOW;
 } WMState;

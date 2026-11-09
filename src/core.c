@@ -50,6 +50,7 @@ void initialize_core(WMState *state){
     state->_SCREEN_WIDTH = DisplayWidth(state->_DPY, DefaultScreen(state->_DPY));
     state->_SCREEN_HEIGHT = DisplayHeight(state->_DPY, DefaultScreen(state->_DPY));
     state->_RUNNING = true;
+    state->_MASTER_RATIO = 0.5F;
     state->_CLIENTS = NULL;
     state->_FOCUSED = NULL;
     state->_CURRENT_TAG = 1;
@@ -78,6 +79,10 @@ void initialize_core(WMState *state){
 void event_loop_core(WMState *state){
     XEvent xev;
     int x11_fd = ConnectionNumber(state->_DPY);
+
+    Client *drag_client = NULL;
+    int drag_button = 0;
+    int start_x = 0, start_y = 0, start_wx = 0, start_wy = 0, start_ww = 0, start_wh = 0;
 
     while(state->_RUNNING){
         while (XPending(state->_DPY)) {
@@ -168,6 +173,57 @@ void event_loop_core(WMState *state){
                     XPropertyEvent *ev = &xev.xproperty;
                     if(ev->atom == XA_WM_NAME && state->_FOCUSED && ev->window == state->_FOCUSED->_WINDOW_ID){
                         update_bar(state);
+                    }
+                    break;
+                }
+                case ButtonPress: {
+                    XButtonEvent *ev = &xev.xbutton;
+                    if(ev->subwindow == None) break; // this checks if the background is clicked
+
+                    Client *c = NULL;
+                    for(Client *curr = state->_CLIENTS; curr; curr = curr->_NEXT){
+                        if(curr->_WINDOW_ID == ev->subwindow) { c = curr; break; }
+                    }
+                    if(!c) break;
+
+                    focus_client(state, c);
+
+                    if(!c->_FLOATING){
+                        c->_FLOATING = true;
+                        layout_apply_tiling_algo(state);
+                    }
+
+                    drag_client = c;
+                    drag_button = ev->button;
+                    start_x = ev->x_root;
+                    start_y = ev->y_root;
+                    start_wx = c->_X; start_wy = c->_Y;
+                    start_ww = c->_W; start_wh = c->_H;
+
+                    XGrabPointer(state->_DPY, ev->subwindow, True, PointerMotionMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                    break;
+                }
+                case MotionNotify:{
+                    if(!drag_client) break;
+
+                    XMotionEvent *ev = &xev.xmotion;
+                    int dx = ev->x_root - start_x;
+                    int dy = ev->y_root - start_y;
+                    if(drag_button == Button1){
+                        drag_client->_X = start_wx + dx;
+                        drag_client->_Y = start_wy + dy;
+                    }else if(drag_button == Button3){
+                        drag_client->_W = (start_ww + dx > 50) ? start_ww + dx : 50;
+                        drag_client->_H = (start_wh + dy > 50) ? start_wy + dy : 50;
+                    }
+
+                    XMoveResizeWindow(state->_DPY, drag_client->_WINDOW_ID, drag_client->_X, drag_client->_Y, drag_client->_W - (2 * state->_BORDER), drag_client->_H - (2 * state->_BORDER));
+                    break;
+                }
+                case ButtonRelease:{
+                    if(drag_client){
+                        XUngrabPointer(state->_DPY, CurrentTime);
+                        drag_client = NULL;
                     }
                     break;
                 }
@@ -269,7 +325,15 @@ void grab_key(WMState* state, const Key* keys, size_t keys_count){
 
         }
     }
+
+    for(size_t i = 0; i < sizeof(modifiers) / sizeof(modifiers[0]); i++){
+        // this is for Alt + left click for moving
+        XGrabButton(state->_DPY, Button1, MOD_KEY | modifiers[i], state->_ROOT, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+        // this if for Alt + right click for resizing
+        XGrabButton(state->_DPY, Button3, MOD_KEY | modifiers[i], state->_ROOT, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    }
 }
+
 void focus_client(WMState *state, Client *client){
     if(!client){
         // This runs when there's no such client as the one passed to the function
@@ -411,4 +475,29 @@ void move_tag_action(WMState* state, const Arg *arg){
         // view_tag_action(state, &(Arg){.i = state->_CURRENT_TAG});
 
     }
+}
+
+void shrink_master_action(WMState *state, const Arg *arg){
+    (void) arg;
+    // clamp the lowest shrink value so that it doesn't shrink into nothingness
+    if(state->_MASTER_RATIO > 0.15F){
+        state->_MASTER_RATIO -= 0.05F;
+        layout_apply_tiling_algo(state);
+    }
+}
+
+void expand_master_action(WMState *state, const Arg *arg){
+    (void)arg;
+    if(state->_MASTER_RATIO < 0.9F){
+        state->_MASTER_RATIO += 0.05F;
+        layout_apply_tiling_algo(state);
+    }
+}
+
+void toggle_floating_action(WMState *state, const Arg *arg){
+    (void) arg;
+    if(!state->_FOCUSED) return;
+
+    state->_FOCUSED->_FLOATING = !state->_FOCUSED->_FLOATING;
+    layout_apply_tiling_algo(state);
 }
