@@ -1,5 +1,6 @@
 #include "../include/core.h"
 #include "../include/layout.h"
+#include "../include/ipc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <X11/Xproto.h>
@@ -129,7 +130,7 @@ void initialize_core(WMState *state){
     printf("[mWM] Initialized on %s (%d, %d)\n", XDisplayName(NULL), state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT);
 
     // Creating the taskbar
-    state->_BAR = XCreateSimpleWindow(state->_DPY, state->_ROOT, 0, 0, state->_SCREEN_WIDTH, state->_SCREEN_HEIGHT, 0, BlackPixel(state->_DPY, DefaultScreen(state->_DPY)), border_inactive);
+    state->_BAR = XCreateSimpleWindow(state->_DPY, state->_ROOT, 0, 0, state->_SCREEN_WIDTH, BAR_HEIGHT, 0, BlackPixel(state->_DPY, DefaultScreen(state->_DPY)), border_inactive);
     state->_GC = XCreateGC(state->_DPY, state->_BAR, 0, NULL);
     XSetForeground(state->_DPY, state->_GC, WhitePixel(state->_DPY, XDefaultScreen(state->_DPY)));
     XMapRaised(state->_DPY, state->_BAR);
@@ -141,6 +142,7 @@ void initialize_core(WMState *state){
 void event_loop_core(WMState *state){
     XEvent xev;
     int x11_fd = ConnectionNumber(state->_DPY);
+    int ipc_fd = ipc_init();
 
     Client *drag_client = NULL;
     int drag_button = 0;
@@ -189,8 +191,8 @@ void event_loop_core(WMState *state){
                     focus_client(state, client);
 
                     // Calling in the tiling function
-                    focus_client(state, client);
                     layout_apply_tiling_algo(state);
+                    focus_client(state, client);
 
                     break;
                 }
@@ -285,7 +287,7 @@ void event_loop_core(WMState *state){
                         drag_client->_Y = start_wy + dy;
                     }else if(drag_button == Button3){
                         drag_client->_W = (start_ww + dx > 50) ? start_ww + dx : 50;
-                        drag_client->_H = (start_wh + dy > 50) ? start_wy + dy : 50;
+                        drag_client->_H = (start_wh + dy > 50) ? start_wh + dy : 50;
                     }
 
                     XMoveResizeWindow(state->_DPY, drag_client->_WINDOW_ID, drag_client->_X, drag_client->_Y, drag_client->_W - (2 * state->_BORDER), drag_client->_H - (2 * state->_BORDER));
@@ -318,18 +320,29 @@ void event_loop_core(WMState *state){
                 default:
                     break;
             }
+
+
         }
 
         fd_set in_fds;
         FD_ZERO(&in_fds);
         FD_SET(x11_fd, &in_fds);
+        if(ipc_fd > 0) FD_SET(ipc_fd, &in_fds);
+
+        int max_fd = (x11_fd > ipc_fd) ? x11_fd : ipc_fd;
 
         struct timeval tval;
         tval.tv_sec = 1;
         tval.tv_usec = 0;
 
-        int num_ready = select(x11_fd + 1, &in_fds, NULL, NULL, &tval);
-        if(num_ready == 0){
+        int num_ready = select(max_fd + 1, &in_fds, NULL, NULL, &tval);
+        
+        if(num_ready > 0){
+            if(ipc_fd >= 0 && FD_ISSET(ipc_fd, &in_fds)){
+                ipc_handle_connection(state, ipc_fd);
+            }
+        }
+        else if(num_ready == 0){
             update_bar(state);
         }else if(num_ready < 0){
             perror("[mWM] select() error");
@@ -428,6 +441,7 @@ void focus_client(WMState *state, Client *client){
         XSetInputFocus(state->_DPY, state->_ROOT, RevertToPointerRoot, CurrentTime);
         state->_FOCUSED = NULL;
         update_bar(state);
+        ewmh_update_active_window(state);
         return;
     }
     state->_FOCUSED = client;

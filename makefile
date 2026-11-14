@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -Iinclude
 LIBS = -lX11
 
-SRCS = src/main.c src/core.c src/layout.c
+SRCS = src/main.c src/core.c src/layout.c src/ipc.c
 OBJS = $(SRCS:.c=.o)
 TARGET = mwm
 
