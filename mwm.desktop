@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=mWM
+Comment=Lightweight X11 Tiling Window Manager
+Exec=mwm-session
+Type=Application
+DesktopNames=mWM

@@ -1,25 +1,43 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -Iinclude
-LIBS = -lX11
+CXX = g++
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+CXXFLAGS = -std=c++17 -O2 -Iinclude
 
-SRCS = src/main.c src/core.c src/layout.c src/ipc.c
+PREFIX = /usr/local
+BINDIR = $(PREFIX)/bin
+XSESSIONSDIR = /usr/share/xsessions
+
+SRCS = $(wildcard src/*.c)
 OBJS = $(SRCS:.c=.o)
-TARGET = mwm
 
-all: $(TARGET)
+all: mwm apps
 
-$(TARGET) : $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
+mwm: $(OBJS)
+	$(CC) $(OBJS) -o mwm -lX11
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-clean:
-	rm -f $(OBJS) $(TARGET)
-
 apps:
-	$(CC) -Wall -Wextra -std=c99 tools/mwm-gamma.c -o mwm-gamma -lX11 -lXrandr -lm
-	$(CC) -Wall -Wextra -std=c99 tools/mwm-tracker.c -o mwm-tracker -lX11 -lXss -lsqlite3
-	g++ -std=c++17 -O2 -Iinclude tools/mwm-control-center.cpp -o mwm-control-center -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -lsqlite3
+	$(CC) $(CFLAGS) tools/mwm-gamma.c -o mwm-gamma -lX11 -lXrandr -lm
+	$(CC) $(CFLAGS) tools/mwm-tracker.c -o mwm-tracker -lX11 -lXss -lsqlite3
+	$(CXX) $(CXXFLAGS) tools/mwm-control-center.cpp -o mwm-control-center -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -lsqlite3
 
-.PHONY: all clean
+install: all
+	install -Dm755 mwm $(DESTDIR)$(BINDIR)/mwm
+	install -Dm755 mwm-gamma $(DESTDIR)$(BINDIR)/mwm-gamma
+	install -Dm755 mwm-tracker $(DESTDIR)$(BINDIR)/mwm-tracker
+	install -Dm755 mwm-control-center $(DESTDIR)$(BINDIR)/mwm-control-center
+	install -Dm755 mwm-session $(DESTDIR)$(BINDIR)/mwm-session
+	install -Dm644 mwm.desktop $(DESTDIR)$(XSESSIONSDIR)/mwm.desktop
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/mwm \
+	      $(DESTDIR)$(BINDIR)/mwm-gamma \
+	      $(DESTDIR)$(BINDIR)/mwm-tracker \
+	      $(DESTDIR)$(BINDIR)/mwm-control-center \
+	      $(DESTDIR)$(BINDIR)/mwm-session \
+	      $(DESTDIR)$(XSESSIONSDIR)/mwm.desktop
+
+clean:
+	rm -f src/*.o mwm mwm-gamma mwm-tracker mwm-control-center
