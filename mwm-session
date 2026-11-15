@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Start screen-time and app usage tracker in the background
+mwm-tracker &
+TRACKER_PID=$!
+
+# Start the window manager
+mwm
+
+# Clean up background daemon on logout
+kill "$TRACKER_PID" 2>/dev/null
