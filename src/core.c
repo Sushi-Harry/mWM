@@ -28,6 +28,8 @@ static int x_error_handler(Display *dpy, XErrorEvent *ee){
     return 0;
 }
 
+
+
 static int x_io_error_handler(Display *dpy){
     (void)dpy;
     fprintf(stderr, "[mWM] Fatal: X Server connection lost (Xephyr closed).\n");
@@ -70,6 +72,46 @@ void ewmh_update_desktop(WMState *state){
     XChangeProperty(state->_DPY, state->_ROOT, state->_NET_NUMBER_OF_DESKTOPS, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&total_desktops, 1);
 }
 
+void scan_existing_windows(WMState *state){
+    Window root_ret, parent_ret;
+    Window* children = NULL;
+    unsigned int nChildren = 0;
+
+    if(!XQueryTree(state->_DPY, state->_ROOT, &root_ret, &parent_ret, &children, &nChildren)){
+        return;
+    }
+
+    for(unsigned int i = 0; i < nChildren; i++){
+        if(children[i] == state->_BAR) continue;
+        XWindowAttributes wa;
+
+        if(!XGetWindowAttributes(state->_DPY, children[i], &wa)) continue;
+        if(wa.override_redirect || wa.map_state != IsViewable) continue;
+
+        XSetWindowBorderWidth(state->_DPY, children[i], state->_BORDER);
+        XSetWindowBorder(state->_DPY, children[i], state->_BORDER_COLOR);
+        XSelectInput(state->_DPY, children[i], PropertyChangeMask | EnterWindowMask);
+
+        Client *client = malloc(sizeof(Client));
+        client->_WINDOW_ID = children[i];
+        client->_X = wa.x;
+        client->_Y = wa.y;
+        client->_W = wa.width;
+        client->_H = wa.height;
+        client->_FLOATING = false;
+        client->_TAG = state->_CURRENT_TAG;
+        client->_NEXT = state->_CLIENTS;
+        state->_CLIENTS = client;
+    }
+
+    if(children) XFree(children);
+    if(state->_CLIENTS){
+        ewmh_update_client_list(state);
+        layout_apply_tiling_algo(state);
+        focus_client(state, state->_CLIENTS);
+    }
+}
+
 void initialize_core(WMState *state){
     // Basically initializing the variables for the WMState *state variable
     state->_DPY = XOpenDisplay(NULL);
@@ -90,6 +132,11 @@ void initialize_core(WMState *state){
     state->_CLIENTS = NULL;
     state->_FOCUSED = NULL;
     state->_CURRENT_TAG = 1;
+    state->_RESTART = false;
+    state->_BORDER = 2;
+    state->_BORDER_ACTIVE   = border_active;
+    state->_BORDER_INACTIVE = border_inactive;
+    state->_SHOW_BAR        = true;
 
     state->_NET_SUPPORTED = XInternAtom(state->_DPY, "_NET_SUPPORTED", False);
     state->_NET_CLIENT_LIST = XInternAtom(state->_DPY, "_NET_CLIENT_LIST", False);
@@ -138,6 +185,7 @@ void initialize_core(WMState *state){
 
     // Grabkey call
     grab_key(state, keys, KEYS_SIZE);
+    scan_existing_windows(state);
 }
 void event_loop_core(WMState *state){
     XEvent xev;
@@ -320,8 +368,6 @@ void event_loop_core(WMState *state){
                 default:
                     break;
             }
-
-
         }
 
         fd_set in_fds;
@@ -348,6 +394,8 @@ void event_loop_core(WMState *state){
             perror("[mWM] select() error");
         }
     }
+
+    ipc_cleanup(ipc_fd);
 }
 void cleanup_core(WMState *state){
     if(state->_DPY){
@@ -448,9 +496,9 @@ void focus_client(WMState *state, Client *client){
     // updating the border colors
     for(Client *curr = state->_CLIENTS; curr != NULL; curr = curr->_NEXT){
         if(curr == client)
-            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, border_active);
+            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, state->_BORDER_ACTIVE);
         else
-            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, border_inactive);
+            XSetWindowBorder(state->_DPY, curr->_WINDOW_ID, state->_BORDER_INACTIVE);
     }
 
     // Setting the focus to the client
@@ -617,4 +665,10 @@ void toggle_floating_action(WMState *state, const Arg *arg){
 
     state->_FOCUSED->_FLOATING = !state->_FOCUSED->_FLOATING;
     layout_apply_tiling_algo(state);
+}
+
+void restart_wm_action(WMState *state, const Arg *arg){
+    (void)arg;
+    state->_RESTART = true;
+    state->_RUNNING = false;
 }

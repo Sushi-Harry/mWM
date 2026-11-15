@@ -1,7 +1,8 @@
 CC = gcc
 CXX = g++
-CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude -MMD -MP
 CXXFLAGS = -std=c++17 -O2 -Iinclude
+
 
 PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
@@ -9,6 +10,9 @@ XSESSIONSDIR = /usr/share/xsessions
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(SRCS:.c=.o)
+DEPS = $(OBJS:.o=.d)
+
+-include $(DEPS)
 
 all: mwm apps
 
@@ -40,4 +44,4 @@ uninstall:
 	      $(DESTDIR)$(XSESSIONSDIR)/mwm.desktop
 
 clean:
-	rm -f src/*.o mwm mwm-gamma mwm-tracker mwm-control-center
+	rm -f src/*.o mwm mwm-gamma mwm-tracker mwm-control-center src/*.d

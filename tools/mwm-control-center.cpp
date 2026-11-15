@@ -117,6 +117,17 @@ int main() {
     float kelvin = 3500.0f;
     int cb_mode = 0, prev_cb_mode = 0;
     float master_ratio = 0.50f;
+    float border_width = 2.0f;
+    bool show_bar = true;
+
+    struct Swatch { Color color; const char *hex; };
+    Swatch palette[] = {
+        { {  82, 148, 226, 255 }, "0x5294e2" }, // Blue
+        { { 180, 142, 173, 255 }, "0xb48ead" }, // Purple
+        { { 163, 190, 140, 255 }, "0xa3be8c" }, // Green
+        { { 235, 203, 139, 255 }, "0xebcb8b" }, // Amber
+        { { 191,  97, 106, 255 }, "0xbf616a" }  // Coral
+    };
 
     std::vector<AppStat> stats;
     int total_sec = 0;
@@ -149,11 +160,38 @@ int main() {
             }
         }
         else if (active_tab == 1) {
-            // --- Live IPC Layout Control ---
-            GuiLabel((Rectangle){ 25, 65, 250, 20 }, "Master Area Split Ratio");
-            GuiSliderBar((Rectangle){ 25, 95, 340, 20 }, nullptr, TextFormat("%.2f", master_ratio), &master_ratio, 0.15f, 0.90f);
-            if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+            // 1. Master Split Ratio
+            GuiLabel((Rectangle){ 25, 60, 250, 20 }, "Master Area Split Ratio");
+            GuiSliderBar((Rectangle){ 25, 85, 340, 20 }, nullptr, TextFormat("%.2f", master_ratio), &master_ratio, 0.15f, 0.90f);
+            if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){ 25, 85, 340, 20 })) {
                 send_ipc(TextFormat("SET_MASTER_FACT %.2f", master_ratio));
+            }
+
+            // 2. Border Width
+            GuiLabel((Rectangle){ 25, 120, 250, 20 }, "Window Border Width");
+            GuiSliderBar((Rectangle){ 25, 145, 340, 20 }, nullptr, TextFormat("%d px", (int)border_width), &border_width, 0.0f, 10.0f);
+            if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), (Rectangle){ 25, 145, 340, 20 })) {
+                send_ipc(TextFormat("SET_BORDER_WIDTH %d", (int)border_width));
+            }
+
+            // 3. Active Border Color Swatches
+            GuiLabel((Rectangle){ 25, 180, 250, 20 }, "Active Border Accent");
+            for (int i = 0; i < 5; i++) {
+                Rectangle box = { 25.0f + i * 42.0f, 208.0f, 32.0f, 26.0f };
+                DrawRectangleRec(box, palette[i].color);
+                DrawRectangleLinesEx(box, 1, DARKGRAY);
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), box)) {
+                    send_ipc(TextFormat("SET_BORDER_ACTIVE %s", palette[i].hex));
+                }
+            }
+
+            // 4. Bar Toggle & Hot Reload
+            if (GuiCheckBox((Rectangle){ 25, 255, 20, 20 }, "Show Top Status Bar", &show_bar)) {
+                send_ipc("TOGGLE_BAR");
+            }
+
+            if (GuiButton((Rectangle){ 25, 305, 150, 30 }, "Reload mWM")) {
+                send_ipc("RESTART_WM");
             }
         }
         else if (active_tab == 2) {

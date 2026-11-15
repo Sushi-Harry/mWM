@@ -24,6 +24,11 @@ typedef struct {
     Client *_FOCUSED;
     bool _RUNNING;
     uint32_t _CURRENT_TAG;
+    bool _RESTART;
+
+    unsigned long _BORDER_ACTIVE;
+    unsigned long _BORDER_INACTIVE;
+    bool _SHOW_BAR;
 
     Window _BAR;
     GC _GC;

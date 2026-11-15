@@ -43,6 +43,7 @@ void move_tag_action(WMState *state, const Arg *arg);
 void shrink_master_action(WMState *state, const Arg *arg);
 void expand_master_action(WMState *state, const Arg *arg);
 void toggle_floating_action(WMState *state, const Arg *arg);
+void restart_wm_action(WMState *state, const Arg *arg);
 
 // This is an array for basic keybinds. The user will have to edit this config and recompile the project everytime if they wanna edit the keybinds
 // There's advantages to this but yeah I do understand that this isn't really a user friendly approach. But it's my project. I get to decide what philosophy I wanna follow
@@ -77,6 +78,8 @@ static const Key keys[] = {
     { MOD_KEY, XK_l, expand_master_action, { ._COMMAND=NULL }},
     // Toggle for floating and tiled windows
     { MOD_KEY, XK_space, toggle_floating_action, { ._COMMAND=NULL }},
+    // For restarting the wm
+    { MOD_KEY | ShiftMask, XK_r, restart_wm_action, {0} },
 };
 
 // static const size_t default_keys_count = sizeof(default_keys) / sizeof(default_keys[0]);

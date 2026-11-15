@@ -10,7 +10,7 @@ void layout_apply_tiling_algo(WMState *state){
             count++;
     }
 
-    int avail_y = BAR_HEIGHT;
+    int avail_y = state->_SHOW_BAR ? BAR_HEIGHT : 0;
     int avail_h = state->_SCREEN_HEIGHT - BAR_HEIGHT;
 
     int master_w = (count == 1) ? state->_SCREEN_WIDTH : (state->_SCREEN_WIDTH * state->_MASTER_RATIO);
